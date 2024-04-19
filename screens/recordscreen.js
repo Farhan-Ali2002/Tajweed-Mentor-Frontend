@@ -5,10 +5,11 @@ import { FontAwesome } from '@expo/vector-icons'; // Import FontAwesome icons
 import * as FileSystem from 'expo-file-system'; // Import FileSystem module
 import { Card, Button, } from 'react-native-elements';
 import { color } from 'react-native-elements/dist/helpers';
-import { BlobServiceClient } from '@azure/storage-blob';
+import firebase from '../helper/firebase';
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import axios from 'axios';
 
-const blobServiceClient = BlobServiceClient.fromConnectionString('<your_connection_string>');
-const containerName = '<your_container_name>';
+
 
 export default function RecordScreen() {
   const [recording, setRecording] = useState(null);
@@ -42,37 +43,121 @@ export default function RecordScreen() {
     }
   }
 
+  // async function uploadFileToFirebase(uri, fileName) {
+  //   const response = await fetch(uri);
+  //   const blob = await response.blob();
+  //   const storage = getStorage();
+    
+  //   const fileRef = ref(storage,`audios/${fileName}`);
+  
+  //   try {
+  //     const snapshot = uploadBytes(fileRef, blob, 'blob').then((snapshot) => {
+  //       console.log('Uploaded to firebase storage!');
+  //     });
+  //     // Get download URL
+  //     const downloadURL = await getDownloadURL(fileRef);
+  //     console.log('Download URL:', downloadURL);
+  
+  //     return downloadURL; // Return the download URL
+  //   } catch (error) {
+  //     console.error('Error uploading file:', error);
+  //     return null; // Return null if there's an error
+  //   }
+  // }
+
+  
+  async function getMfccFeatures(downloadURL) {
+    const apiUrl = 'https://mfccextractionfunction.azurewebsites.net/api/get_mfccs';
+    
+    try {
+      const response = await axios.post(apiUrl, {
+        audio_file: downloadURL
+      });
+  
+      console.log('API request:', {
+        method: 'POST',
+        url: apiUrl,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: { audio_file: downloadURL },
+      });
+  
+      console.log('API response:', response.data);
+    } catch (error) {
+      if (error.response) {
+        console.error('API error data:', error.response.data);
+        console.error('API error status:', error.response.status);
+        console.error('API error headers:', error.response.headers);
+      } else if (error.request) {
+        console.error('API request:', error.request);
+      } else {
+        console.error('API error:', error.message);
+      }
+    }
+  }
+
+async function uploadToAzureBlobStorage(fileUri, fileName) {
+  // const connectionString = 'DefaultEndpointsProtocol=https;AccountName=tajweedaudiostorage;AccountKey=UVL/PL52GJPb/Go9YaQ+SD4FAHGD/MAtk8YLR6ulv+j9EAU2o85E1lBLrSV+MSNsTv9NpGynX39/+AStiU1dSg==;EndpointSuffix=core.windows.net';
+  // const containerName = 'tajweedcontainer';
+
+  // const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+  // const containerClient = blobServiceClient.getContainerClient(containerName);
+  // const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+
+  // try {
+  //   const data = await FileSystem.readAsStringAsync(fileUri, {
+  //     encoding: FileSystem.EncodingType.Base64,
+  //   });
+  //   const uploadBlobResponse = await blockBlobClient.upload(data, data.length);
+    
+  //   console.log('File uploaded to Azure Blob Storage:', uploadBlobResponse._response.request.url);
+    
+  //   return uploadBlobResponse._response.request.url;
+  // } catch (error) {
+  //   console.error('Error uploading file to Azure Blob Storage:', error);
+  //   return null;
+  // }
+}
+
+  
+
   async function stopRecording() {
     setIsRecording(false);
     clearInterval(intervalRef.current); // Stop the duration timer
-  
+
     if (recording) {
       await recording.stopAndUnloadAsync();
       let allRecordings = [...recordings];
       const { sound, status } = await recording.createNewLoadedSoundAsync();
-      const fileURI = recording.getURI();
-  
-      // Upload WAV file to Azure Blob Storage
-      const blobName = `${Date.now()}.wav`;
-      const containerClient = blobServiceClient.getContainerClient(containerName);
-      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-  
-      try {
-        await blockBlobClient.uploadFile(fileURI);
-        console.log('File uploaded to Azure Blob Storage:', blobName);
-  
-        allRecordings.push({
-          sound: sound,
-          duration: getDurationFormatted(status.durationMillis),
-          file: `https://${containerClient.accountName}.blob.core.windows.net/${containerName}/${blobName}`,
-        });
-      } catch (error) {
-        console.error('Error uploading file to Azure Blob Storage:', error);
-        // Handle upload error
-      }
-  
+      allRecordings.push({
+        sound: sound,
+        duration: getDurationFormatted(status.durationMillis),
+        file: recording.getURI(),
+      });
+
       setRecordings(allRecordings);
       setRecording(null);
+
+      // Convert recorded audio to WAV file
+      const fileInfo = await FileSystem.getInfoAsync(recording.getURI());
+      const wavFileURI = `${FileSystem.documentDirectory}${Date.now()}.wav`;
+      await FileSystem.copyAsync({ from: fileInfo.uri, to: wavFileURI });
+      console.log('WAV file saved at:', wavFileURI);
+
+      const fileName = `${Date.now()}.wav`;
+      // const downloadURL = await uploadFileToFirebase(wavFileURI, fileName);
+
+      
+      const azureBlobURL = await uploadToAzureBlobStorage(wavFileURI, fileName);
+
+      if (azureBlobURL) {
+        console.log('Uploaded to Azure Blob URL:', azureBlobURL);
+        getMfccFeatures(azureBlobURL);
+      }
+
+        // You can use this downloadURL as needed, for example, to pass it to your Azure function.
+      
     }
   }
 
