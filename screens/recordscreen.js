@@ -8,6 +8,7 @@ import { color } from 'react-native-elements/dist/helpers';
 import firebase from '../helper/firebase';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import axios from 'axios';
+import { Fetch } from '@tensorflow/tfjs-react-native';
 
 
 export default function RecordScreen() {
@@ -16,6 +17,18 @@ export default function RecordScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const intervalRef = useRef(null);
+  const [model, setModel] = useState(null);
+
+  useEffect(() => {
+    // const loadModel = async () => {
+    //   const modelPath = './assets/tajweed_model/tajweed_analyzer_model.tflite';
+    //   const modelFile = await Fetch(modelPath);
+    //   const model = await tf.loadTFLiteModel(modelFile);
+    //   setModel(model);  
+    // };
+
+    // loadModel();
+  }, []);
 
   async function startRecording() {
     if (recordings.length === 0) {
@@ -66,23 +79,15 @@ export default function RecordScreen() {
   }
   async function getMfccFeatures(downloadURL) {
     // const apiUrl = 'https://mfccextractionfunction.azurewebsites.net/api/get_mfccs';
-    const apiUrl = 'http://192.168.0.116:7071/api/get_mfccs';
+    // const apiUrl = 'http://192.168.0.116:7071/api/get_mfccs';
+    const apiUrl = 'http://192.168.0.116:5000/predict_labels'
     
     try {
       const response = await axios.post(apiUrl, {
         audio_file_url: downloadURL
       });
   
-      console.log('API request:', {
-        method: 'POST',
-        url: apiUrl,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: { audio_file_url: downloadURL },
-      });
-  
-      console.log('API response:', response.data.mfccs[0][0]);
+      console.log('API response:', response.data);
     } catch (error) {
       if (error.response) {
         console.error('API error data:', error.response.data);
