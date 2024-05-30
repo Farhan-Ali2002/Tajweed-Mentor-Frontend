@@ -9,7 +9,11 @@ const FeedbackScreen = ({ route }) => {
   const { predictedLabels, audioUrl } = route.params;
   const overallAccuracy = 0.8;
 
-  const violateLabels = predictedLabels["violated_labels"];
+  const segments_dict = predictedLabels["segments_dict"];
+  const label_list = [
+    "no_rule_0", "heavy_1", "qalqala_2", "no_rule_3", "laam_shimsiya_4", "no_rule_5", "qalqala_6",
+    "qalqala_7", "no_rule_8", "idgham_9", "izhaar-e-halka(tanween hamza)_10", "qalqala_11", "no_rule_12","izhaar-e-halka(tanween hamza)_13","qalqala_14"
+  ];
 
   // Function to play the recorded audio
   const playAudio = async (start, end) => {
@@ -21,23 +25,32 @@ const FeedbackScreen = ({ route }) => {
   };
 
   const renderRuleRow = (rule, index) => {
-    const start = violateLabels[rule][0][0];
-    const end = violateLabels[rule][0][1];
+    if (rule.includes('no_rule')) {
+      return null;
+    }
+
+    const isRuleViolated = segments_dict.hasOwnProperty(rule);
+    const icon = isRuleViolated ? "times" : "check";
+    const iconColor = isRuleViolated ? "red" : "green";
+    const start = isRuleViolated ? segments_dict[rule][0][0] : null;
+    const end = isRuleViolated ? segments_dict[rule][0][1] : null;
 
     return (
       <View style={styles.ruleRow} key={index}>
         <View style={styles.ruleNameContainer}>
           <Text style={styles.ruleText}>{rule.replace(/_/g, ' ')}:</Text>
-          <FontAwesome name="times" size={24} color="red" />
+          <FontAwesome name={icon} size={24} color={iconColor} />
         </View>
-        <FontAwesome.Button
-          name="play"
-          backgroundColor="darkblue"
-          onPress={() => playAudio(start, end)}
-          style={styles.playButton}
-        >
-          Play
-        </FontAwesome.Button>
+        {isRuleViolated && (
+          <FontAwesome.Button
+            name="play"
+            backgroundColor="darkblue"
+            onPress={() => playAudio(start, end)}
+            style={styles.playButton}
+          >
+            Play
+          </FontAwesome.Button>
+        )}
       </View>
     );
   };
@@ -48,7 +61,7 @@ const FeedbackScreen = ({ route }) => {
         <Card containerStyle={styles.cardContainer}>
           <Text style={styles.cardTitle}>Feedback</Text>
           <View style={styles.ruleContainer}>
-            {Object.keys(violateLabels)
+            {label_list
               .filter(rule => !rule.includes('no_rule')) // Filter out keys containing 'no_rule'
               .map(renderRuleRow)}
           </View>
