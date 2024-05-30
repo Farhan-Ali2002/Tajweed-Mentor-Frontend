@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ImageBackground } from 'react-native';
+import { StyleSheet, Text, View, ImageBackground, ActivityIndicator } from 'react-native';
 import { Audio } from 'expo-av';
 import { FontAwesome } from '@expo/vector-icons'; // Import FontAwesome icons
 import * as FileSystem from 'expo-file-system'; // Import FileSystem module
 import { Card, Button, } from 'react-native-elements';
-import { color } from 'react-native-elements/dist/helpers';
-import firebase from '../helper/firebase';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import axios from 'axios';
-import { Fetch } from '@tensorflow/tfjs-react-native';
-
+import { useNavigation } from '@react-navigation/native';
+import firebase from '../helper/firebase';
 
 export default function RecordScreen() {
   const [recording, setRecording] = useState(null);
@@ -17,9 +15,12 @@ export default function RecordScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const intervalRef = useRef(null);
-  const [model, setModel] = useState(null);
+  const [predictedLabels, setPredictedLabels] = useState({});
+  const navigation = useNavigation();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Uncomment and update the following lines if you need to load a model
     // const loadModel = async () => {
     //   const modelPath = './assets/tajweed_model/tajweed_analyzer_model.tflite';
     //   const modelFile = await Fetch(modelPath);
@@ -29,6 +30,13 @@ export default function RecordScreen() {
 
     // loadModel();
   }, []);
+
+  const navigateToFeedback = (labels, audioUrl) => {
+    navigation.navigate('Feedback', {
+      predictedLabels: labels,
+      audioUrl: audioUrl,
+    });
+  };
 
   async function startRecording() {
     if (recordings.length === 0) {
@@ -41,7 +49,6 @@ export default function RecordScreen() {
           });
           const { recording } = await Audio.Recording.createAsync(
             Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY,
-            
           );
           setRecording(recording);
           setIsRecording(true);
@@ -60,34 +67,36 @@ export default function RecordScreen() {
     const response = await fetch(uri);
     const blob = await response.blob();
     const storage = getStorage();
-    
-    const fileRef = ref(storage,`audios/${fileName}`);
-  
+
+    const fileRef = ref(storage, `audios/${fileName}`);
+
     try {
-      const snapshot = uploadBytes(fileRef, blob, 'blob').then((snapshot) => {
-        console.log('Uploaded to firebase storage!');
-      });
+      await uploadBytes(fileRef, blob, 'blob');
+      console.log('Uploaded to firebase storage!');
+
       // Get download URL
       const downloadURL = await getDownloadURL(fileRef);
       console.log('Download URL:', downloadURL);
-  
+
       return downloadURL; // Return the download URL
     } catch (error) {
       console.error('Error uploading file:', error);
       return null; // Return null if there's an error
     }
   }
+
   async function getMfccFeatures(downloadURL) {
-    // const apiUrl = 'https://mfccextractionfunction.azurewebsites.net/api/get_mfccs';
-    // const apiUrl = 'http://192.168.0.116:7071/api/get_mfccs';
-    const apiUrl = 'http://192.168.0.116:5000/predict_labels'
-    
+    const apiUrl = 'http://192.168.0.116:5000/predict_labels';
+    setLoading(true); // Show loading spinner
+
     try {
       const response = await axios.post(apiUrl, {
         audio_file_url: downloadURL
       });
-  
-      console.log('API response:', response.data);
+      setPredictedLabels(response.data);
+      console.log('API response 0 :', response.data);
+      console.log('API response:', predictedLabels);
+      navigateToFeedback(response.data, downloadURL);
     } catch (error) {
       if (error.response) {
         console.error('API error data:', error.response.data);
@@ -98,9 +107,10 @@ export default function RecordScreen() {
       } else {
         console.error('API error:', error.message);
       }
+    } finally {
+      setLoading(false); // Hide loading spinner
     }
   }
-  
 
   async function stopRecording() {
     setIsRecording(false);
@@ -119,20 +129,13 @@ export default function RecordScreen() {
       setRecordings(allRecordings);
       setRecording(null);
 
-      // // Convert recorded audio to WAV file
       const fileInfo = await FileSystem.getInfoAsync(recording.getURI());
-      // const wavFileURI = `${FileSystem.documentDirectory}${Date.now()}.wav`;
-      // await FileSystem.copyAsync({ from: fileInfo.uri, to: wavFileURI });
-      // console.log('WAV file saved at:', wavFileURI);
-
       const fileName = `${Date.now()}.${fileInfo.uri.split('.').pop()}`; // Get the original file extension
       const downloadURL = await uploadFileToFirebase(recording.getURI(), fileName);
 
       if (downloadURL) {
         console.log('Uploaded audio URL:', downloadURL);
         getMfccFeatures(downloadURL);
-
-        // You can use this downloadURL as needed, for example, to pass it to your Azure function.
       }
     }
   }
@@ -146,9 +149,8 @@ export default function RecordScreen() {
   function getRecordingLines() {
     return recordings.map((recordingLine, index) => (
       <View key={index} style={styles.row}>
-        
         <FontAwesome.Button
-        style={{width:120, height: 40}}
+          style={{ width: 120, height: 40 }}
           name="play"
           backgroundColor="darkblue"
           onPress={() => recordingLine.sound.replayAsync()}
@@ -156,13 +158,13 @@ export default function RecordScreen() {
           {" Play"}
         </FontAwesome.Button>
         {recordings.length > 0 && (
-        <Button
-          title="Clear Recording"
-          onPress={clearRecordings}
-          buttonStyle={styles.clearButton}
-          titleStyle={{ color: 'white' }}
-        />
-      )}
+          <Button
+            title="Clear Recording"
+            onPress={clearRecordings}
+            buttonStyle={styles.clearButton}
+            titleStyle={{ color: 'white' }}
+          />
+        )}
       </View>
     ));
   }
@@ -181,19 +183,18 @@ export default function RecordScreen() {
     <ImageBackground style={styles.container} source={require("../assets/background.jpg")}>
       <Card containerStyle={styles.cardContainer}>
         <Card.Image
-        resizeMode='cover'
+          resizeMode='cover'
           source={require('../assets/surahikhlasimg.png')}
           style={styles.image}
         />
-        <Card.Divider/>
-        <Card.FeaturedSubtitle style={{color: 'white', fontSize:16, marginTop:10}}>
-          Say, "He is Allah, [who is] One, 
-          Allah, the Eternal Refuge. 
-          He neither begets nor is born, 
-          Nor is there to Him any equivalent." 
+        <Card.Divider />
+        <Card.FeaturedSubtitle style={{ color: 'white', fontSize: 16, marginTop: 10 }}>
+          Say, "He is Allah, [who is] One,
+          Allah, the Eternal Refuge.
+          He neither begets nor is born,
+          Nor is there to Him any equivalent."
           (Quran 112:1-4)
         </Card.FeaturedSubtitle>
-
       </Card>
 
       <Button
@@ -213,8 +214,10 @@ export default function RecordScreen() {
           {getDurationFormatted(duration * 1000)}
         </Text>
       )}
+      {loading && (
+        <ActivityIndicator size="large" color="black" style={styles.spinner} />
+      )}
       {getRecordingLines()}
-      
     </ImageBackground>
   );
 }
@@ -226,7 +229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-   cardContainer: {
+  cardContainer: {
     backgroundColor: '#1e4681',
     height: '50%',
     width: '100%',
@@ -251,13 +254,13 @@ const styles = StyleSheet.create({
   clearButton: {
     backgroundColor: '#dc3545',
     marginVertical: 10,
-    marginLeft:10
+    marginLeft: 10
   },
   duration: {
     fontSize: 40,
     fontWeight: 'bold',
     marginBottom: 10,
-    color:"white"
+    color: "white"
   },
   row: {
     flexDirection: 'row',
@@ -269,5 +272,8 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
     marginHorizontal: 15,
+  },
+  spinner: {
+    marginTop: 20,
   },
 });

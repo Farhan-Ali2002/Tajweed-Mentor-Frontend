@@ -1,64 +1,62 @@
 import React from 'react';
-import { View, Text, StyleSheet, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, ScrollView } from 'react-native';
 import { Card } from 'react-native-elements';
 import { FontAwesome } from '@expo/vector-icons';
-// import ProgressBar from 'react-native-progress-bar/ProgressBar';
 import * as Progress from 'react-native-progress';
+import { Audio } from 'expo-av';
 
-const FeedbackScreen = () => {
-    const overallAccuracy = 0.8; 
+const FeedbackScreen = ({ route }) => {
+  const { predictedLabels, audioUrl } = route.params;
+  const overallAccuracy = 0.8;
+
+  const violateLabels = predictedLabels["violated_labels"];
+
+  // Function to play the recorded audio
+  const playAudio = async (start, end) => {
+    const { sound } = await Audio.Sound.createAsync({ uri: audioUrl });
+    await sound.playFromPositionAsync(start * 1000);
+    setTimeout(() => {
+      sound.stopAsync();
+    }, (end - start) * 1000);
+  };
+
+  const renderRuleRow = (rule, index) => {
+    const start = violateLabels[rule][0][0];
+    const end = violateLabels[rule][0][1];
+
+    return (
+      <View style={styles.ruleRow} key={index}>
+        <View style={styles.ruleNameContainer}>
+          <Text style={styles.ruleText}>{rule.replace(/_/g, ' ')}:</Text>
+          <FontAwesome name="times" size={24} color="red" />
+        </View>
+        <FontAwesome.Button
+          name="play"
+          backgroundColor="darkblue"
+          onPress={() => playAudio(start, end)}
+          style={styles.playButton}
+        >
+          Play
+        </FontAwesome.Button>
+      </View>
+    );
+  };
+
   return (
     <ImageBackground style={styles.container} source={require("../assets/background.jpg")}>
-      <Card containerStyle={styles.cardContainer}>
-        <Text style={styles.cardTitle}>Feedback</Text>
-        <View style={styles.ruleContainer}>
-          <View style={styles.ruleRow}>
-            <Text style={styles.ruleText}>Qalqalah:</Text>
-            <FontAwesome
-              name="check"
-              size={24}
-              color="green"
-            />
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <Card containerStyle={styles.cardContainer}>
+          <Text style={styles.cardTitle}>Feedback</Text>
+          <View style={styles.ruleContainer}>
+            {Object.keys(violateLabels)
+              .filter(rule => !rule.includes('no_rule')) // Filter out keys containing 'no_rule'
+              .map(renderRuleRow)}
           </View>
-          <View style={styles.ruleRow}>
-            <Text style={styles.ruleText}>Idghaam without ghunnah:</Text>
-            <FontAwesome
-              name="times"
-              size={24}
-              color="red"
-            />
-          </View>
-          <View style={styles.ruleRow}>
-            <Text style={styles.ruleText}>Laam Shimsiya</Text>
-            <FontAwesome
-              name="times"
-              size={24}
-              color="red"
-            />
-          </View>
-          <View style={styles.ruleRow}>
-            <Text style={styles.ruleText}>Izhare Halqi</Text>
-            <FontAwesome
-              name="times"
-              size={24}
-              color="red"
-            />
-          </View>
-          <View style={styles.ruleRow}>
-            <Text style={styles.ruleText}>Wow Madd:</Text>
-            <FontAwesome
-              name="check"
-              size={24}
-              color="green"
-            />
-          </View>
-          {/* Add more rule rows as needed */}
-        </View>
-        {/* <ProgressBar progress={overallAccuracy} style={styles.progressBar} color="#3CB371" /> */}
-        <Text style={{color:"white", marginBottom:3}} h5>Overall Accuracy</Text>
-        <Progress.Bar progress={0.3} width={200} /> 
-        <Text style={{color:"white", marginTop:3}}>30%</Text>
-      </Card>
+          <Text style={{ color: "white", marginBottom: 3 }}>Overall Accuracy</Text>
+          <Progress.Bar progress={overallAccuracy} width={200} />
+          <Text style={{ color: "white", marginTop: 3 }}>{(overallAccuracy * 100).toFixed(2)}%</Text>
+        </Card>
+      </ScrollView>
     </ImageBackground>
   );
 };
@@ -66,39 +64,48 @@ const FeedbackScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  scrollContainer: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f0f0f0', // Background color for the screen
   },
   cardContainer: {
     width: '90%',
     backgroundColor: "#1e4681",
-    borderRadius: 20, // Rounded corners for the card
+    borderRadius: 20,
     padding: 20,
-    paddingTop: 30, // Extra padding for the title
+    paddingTop: 30,
+    marginBottom: 20,
   },
   cardTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
-    color: "white"
+    color: "white",
   },
   ruleContainer: {
     marginTop: 10,
-    
   },
   ruleRow: {
+    marginBottom: 20,
+  },
+  ruleNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
-    justifyContent: "space-between"
   },
   ruleText: {
     fontSize: 18,
-    marginRight: 10,
     color: "white",
-    fontWeight: "bold"
+    fontWeight: "bold",
+    flex: 1,
+  },
+  playButton: {
+    width: 100, // Adjust the width of the play button
   },
 });
 

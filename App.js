@@ -37,7 +37,7 @@ function Root() {
     }}>
         <Drawer.Screen name="Home" component={HomeScreen} />
         <Drawer.Screen name="Recite & Learn" component={RecordScreen} />
-        <Drawer.Screen name="Feedback" component={FeedbackScreen} />
+        {/* <Drawer.Screen name="Feedback" component={FeedbackScreen} /> */}
         {/* Additional screens here */}
       </Drawer.Navigator>
   );
@@ -67,6 +67,14 @@ const App = () => {
           }}
           name="TajweedDetails"
           component={TajweedDetailsScreen}
+        />
+        <Stack.Screen
+          options={{
+            title: 'Feedback', // Set title for Feedback screen
+            // Other options for Feedback screen (if needed)
+          }}
+          name="Feedback"
+          component={FeedbackScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>
